@@ -14,3 +14,6 @@
 *.mpeg
 *.3gp
 *.ogv
+
+# Environment
+env
