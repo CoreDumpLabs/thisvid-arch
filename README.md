@@ -1,19 +1,34 @@
 # thisvid
 
-Scrape and download your ThisVid favourite videos or your own uploaded videos.
+Scrape and download your ThisVid favorite videos or your own uploaded videos.
+
+Please read the [LICENSE](LICENSE) file for your rights and the licensor's rights.
 
 ## Requirements
 
 - Python 3.8+
-- `requests`, `python-dotenv` — `pip install -r requirements.txt`
+- `requests`, `python-dotenv`
 - `yt-dlp` binary in the same directory:
   ```bash
   curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o yt-dlp && chmod +x yt-dlp
   ```
 
+## Installation
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+# either:
+pip install -r requirements.txt
+
+# or:
+pip install .
+```
+
 ## Setup
 
-Create a `.env` file in the same directory:
+Create an `env` file in the same directory (see `env.template`):
 
 ```
 THISVID_USERNAME=your_username
@@ -42,7 +57,7 @@ One of `--fav` or `--self` is always required.
 
 | Flag | Behaviour |
 |---|---|
-| `--fav` | Scrape and download your favourite videos |
+| `--fav` | Scrape and download your favorite videos |
 | `--self` | Scrape and download your own uploaded videos |
 
 Both modes scrape the listing, download every video, and fetch comments — all interleaved per video. Use the flags below to opt out of individual steps.
@@ -123,9 +138,9 @@ These flags are per-invocation — specify them on whichever run performs the do
 | `thumbnail` | Thumbnail image URL |
 | `rating` | Rating percentage (e.g. `98%`) |
 | `views` | View count |
-| `favorites` | Number of times favourited |
+| `favorites` | Number of times favorited |
 | `comments` | Comment count |
-| `date_added` | When you added it to favourites (or uploaded, for `--self`) |
+| `date_added` | When you added it to favorites (or uploaded, for `--self`) |
 | `visibility` | `public` or `private` |
 | `duration` | ISO 8601 duration (e.g. `PT12M34S`) — populated during download |
 | `upload_date` | Upload date — populated during download |
@@ -183,22 +198,22 @@ Files are named `<video_id>_<title>.<ext>`.
 ## Examples
 
 ```bash
-# Scrape and download favourites (listing + videos + comments)
+# Scrape and download favorites (listing + videos + comments)
 python3 thisvid.py --fav
 
 # Scrape and download your own uploaded videos
 python3 thisvid.py --self
 
-# Scrape favourites listing only — no download
+# Scrape favorites listing only — no download
 python3 thisvid.py --fav --no-download
 
-# Download favourites, skip comments
+# Download favorites, skip comments
 python3 thisvid.py --fav --no-comments
 
-# Download videos 50–150 from your favourites
+# Download videos 50–150 from your favorites
 python3 thisvid.py --fav --from 50 --to 150
 
-# Resume an interrupted favourites download
+# Resume an interrupted favorites download
 python3 thisvid.py --fav --resume
 
 # Re-download a specific subset (e.g. missing videos)

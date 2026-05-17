@@ -2,7 +2,7 @@
 """
 thisvid_favs.py — scrape and download your ThisVid favourite videos or your own uploads.
 
-Credentials are read from a .env file (THISVID_USERNAME / THISVID_PASSWORD)
+Credentials are read from an env file (THISVID_USERNAME / THISVID_PASSWORD)
 and can be overridden with --username / --password.
 
 Default behaviour (no flags):
@@ -26,7 +26,7 @@ import time
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv("env")
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -533,9 +533,9 @@ def main(args):
     password = args.password or os.getenv("THISVID_PASSWORD")
 
     if not username:
-        sys.exit("ERROR: No username. Use --username or set THISVID_USERNAME in .env")
+        sys.exit("ERROR: No username. Use --username or set THISVID_USERNAME in env")
     if not password:
-        sys.exit("ERROR: No password. Use --password or set THISVID_PASSWORD in .env")
+        sys.exit("ERROR: No password. Use --password or set THISVID_PASSWORD in env")
 
     # ── Download-only mode ───────────────────────────────────────────────────
     if args.download_only:
@@ -629,9 +629,9 @@ EXAMPLES
 
     auth = parser.add_argument_group("Authentication")
     auth.add_argument("--username", metavar="USER",
-                      help="ThisVid username (overrides THISVID_USERNAME in .env)")
+                      help="ThisVid username (overrides THISVID_USERNAME in env)")
     auth.add_argument("--password", metavar="PASS",
-                      help="ThisVid password (overrides THISVID_PASSWORD in .env)")
+                      help="ThisVid password (overrides THISVID_PASSWORD in env)")
 
     mode = parser.add_argument_group("Mode")
     mode.add_argument("--self", dest="self_videos", action="store_true",

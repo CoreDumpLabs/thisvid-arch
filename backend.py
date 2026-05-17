@@ -14,7 +14,7 @@ import time
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv("env")
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -298,6 +298,16 @@ class Downloader:
                         resp.raise_for_status()
                         if CommentFetcher.is_unavailable(resp.text):
                             v["unavailable"] = True
+                except requests.HTTPError as e:
+                    if e.response is not None and e.response.status_code == 404:
+                        print(f"#   WARNING: video not found (404), skipping.", file=sys.stderr)
+                        self._log_status(log_path, v["id"], "unavailable")
+                        continue
+                    flush_comments()
+                    sys.exit(
+                        f"ERROR: Network error fetching '{v['title']}': {e}\n"
+                        "       Use --resume to retry from where you left off."
+                    )
                 except requests.RequestException as e:
                     flush_comments()
                     sys.exit(
