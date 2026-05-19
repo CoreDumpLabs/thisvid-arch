@@ -23,6 +23,21 @@ import random
 import subprocess
 import tempfile
 import time
+
+_REQUIRED = {"requests": "requests", "dotenv": "python-dotenv"}
+_missing = []
+for _mod, _pkg in _REQUIRED.items():
+    try:
+        __import__(_mod)
+    except ImportError:
+        _missing.append(_pkg)
+if _missing:
+    sys.exit(
+        f"Missing required packages: {', '.join(_missing)}\n"
+        "Install them with:\n\n"
+        "  pip install -r requirements.txt\n"
+    )
+
 import requests
 from dotenv import load_dotenv
 
@@ -198,7 +213,11 @@ def login(username, password):
 
     m = re.search(r"userId:\s*'(\d+)'", resp.text)
     if not m:
-        sys.exit("ERROR: Login failed — could not find user ID in response.")
+        sys.exit(
+            "ERROR: Login failed — check that your username and password are correct.\n"
+            "Make sure you have a file called 'env' with your credentials.\n"
+            "See env.template for the correct format."
+        )
     uid = m.group(1)
     print(f"# Logged in as {username} (uid={uid})", file=sys.stderr)
 
@@ -533,9 +552,17 @@ def main(args):
     password = args.password or os.getenv("THISVID_PASSWORD")
 
     if not username:
-        sys.exit("ERROR: No username. Use --username or set THISVID_USERNAME in env")
+        sys.exit(
+            "ERROR: No username provided.\n"
+            "Use --username or create a file called 'env' with your credentials.\n"
+            "See env.template for the correct format."
+        )
     if not password:
-        sys.exit("ERROR: No password. Use --password or set THISVID_PASSWORD in env")
+        sys.exit(
+            "ERROR: No password provided.\n"
+            "Use --password or create a file called 'env' with your credentials.\n"
+            "See env.template for the correct format."
+        )
 
     # ── Download-only mode ───────────────────────────────────────────────────
     if args.download_only:

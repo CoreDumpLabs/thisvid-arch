@@ -12,6 +12,20 @@ import argparse
 import os
 import sys
 
+_REQUIRED = {"requests": "requests", "dotenv": "python-dotenv"}
+_missing = []
+for _mod, _pkg in _REQUIRED.items():
+    try:
+        __import__(_mod)
+    except ImportError:
+        _missing.append(_pkg)
+if _missing:
+    sys.exit(
+        f"Missing required packages: {', '.join(_missing)}\n"
+        "Install them with:\n\n"
+        "  pip install -r requirements.txt\n"
+    )
+
 from backend import ThisVidClient, Downloader, load_videos, resolve_outputs, write_tsv, write_json, VIDEO_FIELDS
 from favorites import FavoritesScraper, FAVS_URL
 from uploaded import UploadedScraper
@@ -51,9 +65,17 @@ def main(args):
     password = args.password or os.getenv("THISVID_PASSWORD")
 
     if not username:
-        sys.exit("ERROR: No username. Use --username or set THISVID_USERNAME in env")
+        sys.exit(
+            "ERROR: No username provided.\n"
+            "Use --username or create a file called 'env' with your credentials.\n"
+            "See env.template for the correct format."
+        )
     if not password:
-        sys.exit("ERROR: No password. Use --password or set THISVID_PASSWORD in env")
+        sys.exit(
+            "ERROR: No password provided.\n"
+            "Use --password or create a file called 'env' with your credentials.\n"
+            "See env.template for the correct format."
+        )
 
     # ── Download-only mode ───────────────────────────────────────────────────
     if args.download_only:

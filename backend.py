@@ -165,7 +165,11 @@ class ThisVidClient:
             print(f"DEBUG: Response length={len(resp.text)}", file=sys.stderr)
             print(f"DEBUG: History={[r.status_code for r in resp.history]}", file=sys.stderr)
             print(f"DEBUG: First 2000 chars of response:\n{resp.text[:2000]}", file=sys.stderr)
-            sys.exit("ERROR: Login failed — could not find user ID in response.")
+            sys.exit(
+                "ERROR: Login failed — check that your username and password are correct.\n"
+                "Make sure you have a file called 'env' with your credentials.\n"
+                "See env.template for the correct format."
+            )
         self.uid = m.group(1)
         print(f"# Logged in as {self.username} (uid={self.uid})", file=sys.stderr)
 
