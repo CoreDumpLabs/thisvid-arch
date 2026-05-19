@@ -1,4 +1,4 @@
-# thisvid
+# thisvid-arch
 
 Scrape and download your ThisVid favorite videos or your own uploaded videos.
 
