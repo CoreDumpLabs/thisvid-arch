@@ -2,16 +2,20 @@
 
 Scrape and download your ThisVid favorite videos or your own uploaded videos.
 
+```bash
+# Download all your uploaded videos
+python3 thisvid.py --self
+
+# Download all your favorites
+python3 thisvid.py --fav
+```
+
 Please read the [LICENSE](LICENSE) file for your rights and the licensor's rights.
 
 ## Requirements
 
 - Python 3.8+
-- `requests`, `python-dotenv`
-- `yt-dlp` binary in the same directory:
-  ```bash
-  curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o yt-dlp && chmod +x yt-dlp
-  ```
+- `requests`, `python-dotenv`, `yt-dlp` (all installed automatically via pip)
 
 ## Installation
 

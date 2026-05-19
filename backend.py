@@ -6,6 +6,7 @@ import json
 import os
 import random
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,7 +21,7 @@ load_dotenv("env")
 
 LOGIN_PAGE = "https://thisvid.com/login.php"
 LOGIN_URL  = "https://thisvid.com/login/"
-YTDLP      = os.path.join(os.path.dirname(os.path.abspath(__file__)), "yt-dlp")
+YTDLP      = shutil.which("yt-dlp") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "yt-dlp")
 
 VIDEO_FIELDS = ["id", "url", "title", "thumbnail", "rating", "views",
                 "favorites", "comments", "date_added", "visibility",
@@ -78,8 +79,12 @@ def write_json(path, data, append=False):
         with open(path, encoding="utf-8") as f:
             existing = json.load(f)
         data = existing + data
-    with open(path, "w", encoding="utf-8") as f:
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
 
 
 def load_videos(path):
@@ -156,6 +161,10 @@ class ThisVidClient:
 
         m = re.search(r"userId:\s*'(\d+)'", resp.text)
         if not m:
+            print(f"DEBUG: Login response status={resp.status_code}, url={resp.url}", file=sys.stderr)
+            print(f"DEBUG: Response length={len(resp.text)}", file=sys.stderr)
+            print(f"DEBUG: History={[r.status_code for r in resp.history]}", file=sys.stderr)
+            print(f"DEBUG: First 2000 chars of response:\n{resp.text[:2000]}", file=sys.stderr)
             sys.exit("ERROR: Login failed — could not find user ID in response.")
         self.uid = m.group(1)
         print(f"# Logged in as {self.username} (uid={self.uid})", file=sys.stderr)
@@ -274,80 +283,96 @@ class Downloader:
         try:
             self.client.write_cookie_file(cookie_file)
 
+            MAX_RETRIES = 10
+            RETRY_WAIT = 10
+
             for i, v in enumerate(target, 1):
                 if i > 1:
                     sleep(args.delay)
 
                 print(f"# [{i}/{total}] {v['title']} [{v['visibility']}]", file=sys.stderr)
 
-                try:
-                    if url_resolver and not v.get("url"):
-                        print("#   resolving URL...", file=sys.stderr)
-                        v["url"] = url_resolver(v["id"]) or ""
-                        if not v["url"]:
-                            print("#   WARNING: could not resolve URL, skipping.", file=sys.stderr)
-                            continue
-                        sleep(args.delay)
+                for attempt in range(1, MAX_RETRIES + 1):
+                    last_attempt = attempt == MAX_RETRIES
+                    error_msg = None
 
-                    if args.comments:
-                        comments = fetcher.fetch(v)  # enriches v in place; also fetches metadata
-                        all_comments.extend(comments)
-                        sleep(args.delay)
-                    else:
-                        resp = self.client.get(v["url"], timeout=20)
-                        resp.raise_for_status()
-                        if CommentFetcher.is_unavailable(resp.text):
-                            v["unavailable"] = True
-                except requests.HTTPError as e:
-                    if e.response is not None and e.response.status_code == 404:
-                        print(f"#   WARNING: video not found (404), skipping.", file=sys.stderr)
+                    try:
+                        if url_resolver and not v.get("url"):
+                            print("#   resolving URL...", file=sys.stderr)
+                            v["url"] = url_resolver(v["id"]) or ""
+                            if not v["url"]:
+                                print("#   WARNING: could not resolve URL, skipping.", file=sys.stderr)
+                                break
+                            sleep(args.delay)
+
+                        if args.comments:
+                            comments = fetcher.fetch(v)  # enriches v in place; also fetches metadata
+                            all_comments.extend(comments)
+                            sleep(args.delay)
+                        else:
+                            resp = self.client.get(v["url"], timeout=20)
+                            resp.raise_for_status()
+                            if CommentFetcher.is_unavailable(resp.text):
+                                v["unavailable"] = True
+                    except requests.HTTPError as e:
+                        if e.response is not None and e.response.status_code == 404:
+                            print(f"#   WARNING: video not found (404), skipping.", file=sys.stderr)
+                            self._log_status(log_path, v["id"], "unavailable")
+                            break
+                        error_msg = f"ERROR: Network error fetching '{v['title']}': {e}"
+                    except requests.RequestException as e:
+                        error_msg = f"ERROR: Network error fetching '{v['title']}': {e}"
+
+                    if error_msg:
+                        if last_attempt:
+                            flush_comments()
+                            sys.exit(f"{error_msg}\n       Failed after {MAX_RETRIES} attempts.")
+
+                        print(f"#   Attempt {attempt}/{MAX_RETRIES} failed: {error_msg}", file=sys.stderr)
+                        print(f"#   Retrying in {RETRY_WAIT}s...", file=sys.stderr)
+                        time.sleep(RETRY_WAIT)
+                        continue
+
+                    if v.get("unavailable"):
+                        print("#   WARNING: video removed (no player), skipping.", file=sys.stderr)
                         self._log_status(log_path, v["id"], "unavailable")
+                        break
+
+                    print("#   downloading...", file=sys.stderr)
+                    ytdlp_cmd = [
+                        YTDLP,
+                        "--cookies", cookie_file,
+                        "--output", os.path.join(args.output_dir, "%(id)s_%(title)s.%(ext)s"),
+                        "--no-playlist",
+                        "--quiet", "--progress",
+                    ]
+                    if getattr(args, "no_warnings", False):
+                        ytdlp_cmd.append("--no-warnings")
+                    ytdlp_cmd.append(v["url"])
+                    result = subprocess.run(ytdlp_cmd, stderr=subprocess.PIPE, text=True)
+                    if result.returncode != 0:
+                        if result.stderr:
+                            sys.stderr.write(result.stderr)
+                        if "private" in result.stderr.lower():
+                            print("#   WARNING: video is private, skipping.", file=sys.stderr)
+                            self._log_status(log_path, v["id"], "private")
+                            break
+                        if last_attempt:
+                            flush_comments()
+                            sys.exit(
+                                f"ERROR: Download failed: {v['title']}\n"
+                                f"       Failed after {MAX_RETRIES} attempts."
+                            )
+                        print(f"#   Attempt {attempt}/{MAX_RETRIES} failed: download error", file=sys.stderr)
+                        print(f"#   Retrying in {RETRY_WAIT}s...", file=sys.stderr)
+                        time.sleep(RETRY_WAIT)
                         continue
                     flush_comments()
-                    sys.exit(
-                        f"ERROR: Network error fetching '{v['title']}': {e}\n"
-                        "       Use --resume to retry from where you left off."
-                    )
-                except requests.RequestException as e:
-                    flush_comments()
-                    sys.exit(
-                        f"ERROR: Network error fetching '{v['title']}': {e}\n"
-                        "       Use --resume to retry from where you left off."
-                    )
-
-                if v.get("unavailable"):
-                    print("#   WARNING: video removed (no player), skipping.", file=sys.stderr)
-                    self._log_status(log_path, v["id"], "unavailable")
-                    continue
-
-                print("#   downloading...", file=sys.stderr)
-                ytdlp_cmd = [
-                    YTDLP,
-                    "--cookies", cookie_file,
-                    "--output", os.path.join(args.output_dir, "%(id)s_%(title)s.%(ext)s"),
-                    "--no-playlist",
-                    "--quiet", "--progress",
-                ]
-                if getattr(args, "no_warnings", False):
-                    ytdlp_cmd.append("--no-warnings")
-                ytdlp_cmd.append(v["url"])
-                result = subprocess.run(ytdlp_cmd, stderr=subprocess.PIPE, text=True)
-                if result.returncode != 0:
-                    if result.stderr:
-                        sys.stderr.write(result.stderr)
-                    if "private" in result.stderr.lower():
-                        print("#   WARNING: video is private, skipping.", file=sys.stderr)
-                        self._log_status(log_path, v["id"], "private")
-                        continue
-                    flush_comments()
-                    sys.exit(
-                        f"ERROR: Download failed: {v['title']}\n"
-                        "       Use --resume to retry from where you left off."
-                    )
-                self._log_status(log_path, v["id"], "downloaded")
+                    all_comments.clear()
+                    self._log_status(log_path, v["id"], "downloaded")
+                    break
 
         finally:
             os.unlink(cookie_file)
 
         print(f"# All {total} downloads complete.", file=sys.stderr)
-        flush_comments()

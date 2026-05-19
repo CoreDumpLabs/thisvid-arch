@@ -5,13 +5,14 @@ requires-python = ">=3.8"
 dependencies = [
     "requests",
     "python-dotenv",
+    "yt-dlp",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest"]
 
 [project.scripts]
-thisvid = "thisvid:main"
+thisvid-arch = "thisvid_arch:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
