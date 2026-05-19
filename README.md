@@ -30,6 +30,10 @@ pip install -r requirements.txt
 pip install .
 ```
 
+## Tip: use a terminal multiplexer
+
+Downloads can take a long time. Running inside [tmux](https://github.com/tmux/tmux) or [GNU screen](https://www.gnu.org/software/screen/) prevents losing progress if your terminal or SSH session disconnects.
+
 ## Setup
 
 Create an `env` file in the same directory (see `env.template`):
