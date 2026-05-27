@@ -4,10 +4,10 @@ Scrape and download your ThisVid favorite videos or your own uploaded videos.
 
 ```bash
 # Download all your uploaded videos
-python3 thisvid.py --self
+python3 thisvid-arch.py --self
 
 # Download all your favorites
-python3 thisvid.py --fav
+python3 thisvid-arch.py --fav
 ```
 
 Please read the [LICENSE](LICENSE) file for your rights and the licensor's rights.
@@ -15,19 +15,35 @@ Please read the [LICENSE](LICENSE) file for your rights and the licensor's right
 ## Requirements
 
 - Python 3.8+
-- `requests`, `python-dotenv`, `yt-dlp` (all installed automatically via pip)
+- `requests`, `python-dotenv`, `yt-dlp`, `camoufox`, `playwright==1.50.0` (all installed automatically via pip)
 
 ## Installation
 
 ```bash
+# Create a virtualenv, install dependencies, and Camoufox:
+make install
+source .venv/bin/activate
+```
+
+Or manually:
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
-
-# either:
 pip install -r requirements.txt
+python -m camoufox fetch
+```
 
-# or:
-pip install .
+### CAPTCHA login
+
+ThisVid currently presents a Cloudflare Turnstile challenge during login. The
+script uses Camoufox in its Linux virtual-display mode. It first waits for
+automatic verification; if Turnstile displays its checkbox, it clicks the
+rendered widget and waits for the issued token. No desktop session is required:
+
+```bash
+sudo apt install xvfb
+python3 thisvid-arch.py --fav
 ```
 
 ## Tip: use a terminal multiplexer
@@ -50,7 +66,7 @@ Credentials can also be passed at runtime with `--username` / `--password`.
 ## Usage
 
 ```
-python3 thisvid.py --fav | --self [OPTIONS]
+python3 thisvid-arch.py --fav | --self [OPTIONS]
 ```
 
 One of `--fav` or `--self` is always required.
@@ -207,35 +223,35 @@ Files are named `<video_id>_<title>.<ext>`.
 
 ```bash
 # Scrape and download favorites (listing + videos + comments)
-python3 thisvid.py --fav
+python3 thisvid-arch.py --fav
 
 # Scrape and download your own uploaded videos
-python3 thisvid.py --self
+python3 thisvid-arch.py --self
 
 # Scrape favorites listing only — no download
-python3 thisvid.py --fav --no-download
+python3 thisvid-arch.py --fav --no-download
 
 # Download favorites, skip comments
-python3 thisvid.py --fav --no-comments
+python3 thisvid-arch.py --fav --no-comments
 
 # Download videos 50–150 from your favorites
-python3 thisvid.py --fav --from 50 --to 150
+python3 thisvid-arch.py --fav --from 50 --to 150
 
 # Resume an interrupted favorites download
-python3 thisvid.py --fav --resume
+python3 thisvid-arch.py --fav --resume
 
 # Re-download a specific subset (e.g. missing videos)
-python3 thisvid.py --fav --manifest alice_favorites_missing.tsv
+python3 thisvid-arch.py --fav --manifest alice_favorites_missing.tsv
 
 # Download from a previously saved listing
-python3 thisvid.py --download-only alice_favorites.json
+python3 thisvid-arch.py --download-only alice_favorites.json
 
 # Download a specific range from a saved listing
-python3 thisvid.py --download-only alice_favorites.json --from 100 --to 200
+python3 thisvid-arch.py --download-only alice_favorites.json --from 100 --to 200
 
 # Suppress yt-dlp warnings
-python3 thisvid.py --fav --no-warnings
+python3 thisvid-arch.py --fav --no-warnings
 
 # Use different credentials at runtime
-python3 thisvid.py --fav --username other_user --password s3cr3t
+python3 thisvid-arch.py --fav --username other_user --password s3cr3t
 ```

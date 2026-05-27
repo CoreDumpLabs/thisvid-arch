@@ -1,18 +1,17 @@
 [project]
-name = "thisvid-favs"
+name = "thisvid-arch"
 version = "0.1.0"
 requires-python = ">=3.8"
 dependencies = [
     "requests",
     "python-dotenv",
     "yt-dlp",
+    "camoufox",
+    "playwright==1.50.0",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest"]
-
-[project.scripts]
-thisvid-arch = "thisvid_arch:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

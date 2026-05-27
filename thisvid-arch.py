@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-thisvid.py — scrape and download your ThisVid favourite videos or your own uploads.
+thisvid-arch.py — scrape and download your ThisVid favourite videos or your own uploads.
 
 Credentials are read from an env file (THISVID_USERNAME / THISVID_PASSWORD)
 and can be overridden with --username / --password.
@@ -183,7 +183,7 @@ def main(args):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        prog="thisvid.py",
+        prog="thisvid-arch.py",
         description=(
             "Scrape and download your ThisVid favourite videos or your own uploads.\n\n"
             "By default this app downloads. Just run it and it will fetch the video listing\n"
@@ -223,22 +223,22 @@ OUTPUT FILES (comments)
   --no-comments           Skip comment fetching entirely.
 
 WORKFLOW (--fav)
-  python3 thisvid.py --fav                                    # fetch listing + download (the default)
-  python3 thisvid.py --fav                                    # subsequent runs reuse cached listing
-  python3 thisvid.py --fav --probe                            # refresh listing only, no download
-  python3 thisvid.py --fav --no-download                      # fetch listing if needed, no download
-  python3 thisvid.py --fav --manifest missing.tsv             # download a specific subset
+  python3 thisvid-arch.py --fav                                    # fetch listing + download (the default)
+  python3 thisvid-arch.py --fav                                    # subsequent runs reuse cached listing
+  python3 thisvid-arch.py --fav --probe                            # refresh listing only, no download
+  python3 thisvid-arch.py --fav --no-download                      # fetch listing if needed, no download
+  python3 thisvid-arch.py --fav --manifest missing.tsv             # download a specific subset
 
 EXAMPLES
-  python3 thisvid.py --fav
-  python3 thisvid.py --fav --probe
-  python3 thisvid.py --fav --from 50 --to 100
-  python3 thisvid.py --fav --manifest GassesAndSolids_favorites_missing.tsv
-  python3 thisvid.py --self
-  python3 thisvid.py --self --no-comments
-  python3 thisvid.py --download-only GassesAndSolids_favorites.json
-  python3 thisvid.py --download-only GassesAndSolids_favorites.json --resume
-  python3 thisvid.py --fav --delay 2
+  python3 thisvid-arch.py --fav
+  python3 thisvid-arch.py --fav --probe
+  python3 thisvid-arch.py --fav --from 50 --to 100
+  python3 thisvid-arch.py --fav --manifest GassesAndSolids_favorites_missing.tsv
+  python3 thisvid-arch.py --self
+  python3 thisvid-arch.py --self --no-comments
+  python3 thisvid-arch.py --download-only GassesAndSolids_favorites.json
+  python3 thisvid-arch.py --download-only GassesAndSolids_favorites.json --resume
+  python3 thisvid-arch.py --fav --delay 2
 """,
     )
 

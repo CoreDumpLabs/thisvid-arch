@@ -110,80 +110,144 @@ class ThisVidClient:
         self.uid = None
         self.session = requests.Session()
 
+    _CAPTCHA_SOLVED_JS = """() => {
+        const names = ['cf-turnstile-response', 'g-recaptcha-response', 'code'];
+        for (const n of names) {
+            const el = document.querySelector('[name="' + n + '"]');
+            if (el && el.value && el.value.length > 10) return true;
+        }
+        return false;
+    }"""
+
+    def _browser_login(self):
+        """Open the login page and return (html, cookies, url, user_agent)."""
+        from camoufox.sync_api import Camoufox
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+        virtual = sys.platform.startswith("linux") and not (
+            os.getenv("DISPLAY") or os.getenv("WAYLAND_DISPLAY")
+        )
+        mode = "camoufox-virtual" if virtual else "camoufox"
+        print(f"# [{mode}] Launching browser...", file=sys.stderr)
+        with Camoufox(
+            headless="virtual" if virtual else False,
+            disable_coop=True,
+            i_know_what_im_doing=True,
+            humanize=True,
+            window=(1280, 720),
+            os="linux" if sys.platform.startswith("linux") else None,
+        ) as browser:
+            page = browser.new_page()
+            browser_user_agent = page.evaluate("navigator.userAgent")
+
+            print(f"# [{mode}] Navigating to {LOGIN_PAGE}...", file=sys.stderr)
+            page.goto(LOGIN_PAGE, wait_until="load", timeout=30_000)
+            print(f"# [{mode}] Page loaded (url={page.url}).", file=sys.stderr)
+
+            page.fill('input[name="username"]', self.username)
+            page.fill('input[name="pass"]', self.password)
+            print(f"# [{mode}] Credentials filled.", file=sys.stderr)
+
+            rem = page.query_selector('input[name="remember_me"]')
+            if rem:
+                page.evaluate(
+                    "el => { if (el.type === 'checkbox') el.checked = true; else el.value = '1'; }",
+                    rem,
+                )
+
+            has_captcha = page.query_selector('.captcha-holder, .g-recaptcha, .cf-turnstile') is not None
+            if has_captcha:
+                print(
+                    f"# [{mode}] CAPTCHA detected, waiting for automatic Turnstile verification...",
+                    file=sys.stderr,
+                )
+                try:
+                    page.wait_for_function(self._CAPTCHA_SOLVED_JS, timeout=5_000)
+                except PlaywrightTimeout:
+                    widget = page.locator(".g-recaptcha").bounding_box()
+                    if not widget:
+                        raise RuntimeError("ERROR: Turnstile widget could not be located.")
+                    print(f"# [{mode}] Turnstile requested verification, clicking widget...", file=sys.stderr)
+                    page.mouse.click(widget["x"] + 28, widget["y"] + 30)
+                    try:
+                        page.wait_for_function(self._CAPTCHA_SOLVED_JS, timeout=30_000)
+                    except PlaywrightTimeout as exc:
+                        raise RuntimeError(
+                            "ERROR: Turnstile did not issue a CAPTCHA token after verification."
+                        ) from exc
+                print(f"# [{mode}] CAPTCHA token issued.", file=sys.stderr)
+            else:
+                print(f"# [{mode}] No CAPTCHA detected.", file=sys.stderr)
+
+            print(f"# [{mode}] Clicking login button...", file=sys.stderr)
+            page.click('button.login')
+
+            try:
+                page.wait_for_url(lambda url: "/login" not in url, timeout=15_000)
+                print(f"# [{mode}] Redirected to {page.url}.", file=sys.stderr)
+            except PlaywrightTimeout:
+                print(f"# [{mode}] WARNING: Still on login page after 15s (url={page.url}).", file=sys.stderr)
+
+            try:
+                page.wait_for_load_state("networkidle", timeout=10_000)
+            except PlaywrightTimeout:
+                print(f"# [{mode}] WARNING: networkidle timed out, proceeding anyway.", file=sys.stderr)
+
+            content = page.content()
+            cookies = page.context.cookies(["https://thisvid.com"])
+            final_url = page.url
+            print(f"# [{mode}] Login flow complete (final_url={final_url}, html={len(content)} bytes).", file=sys.stderr)
+            return content, cookies, final_url, browser_user_agent
+
     def login(self):
-        """Log in and populate self.uid. Returns self for chaining."""
-        self.session.headers.update({
-            "User-Agent":                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-            "Accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-            "Accept-Language":           "en-US,en;q=0.9,fr;q=0.8,de;q=0.7",
-            "Accept-Encoding":           "gzip, deflate, br, zstd",
-            "Connection":                "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest":            "document",
-            "Sec-Fetch-Mode":            "navigate",
-            "Sec-Fetch-Site":            "none",
-            "Sec-Fetch-User":            "?1",
-            "sec-ch-ua":                 '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-            "sec-ch-ua-mobile":          "?0",
-            "sec-ch-ua-platform":        '"macOS"',
-        })
+        """Log in via Camoufox (handles Turnstile CAPTCHA). Returns self for chaining."""
+        try:
+            import camoufox  # noqa: F401
+        except ImportError:
+            sys.exit(
+                "ERROR: camoufox is required for login.\n"
+                "  pip install -r requirements.txt && python -m camoufox fetch"
+            )
 
-        self.session.get(LOGIN_PAGE, timeout=20)
+        try:
+            content, cookies, final_url, browser_user_agent = self._browser_login()
+        except RuntimeError as exc:
+            sys.exit(str(exc))
 
-        self.session.headers.update({
-            "Accept":                      "*/*",
-            "Content-Type":                "application/x-www-form-urlencoded; charset=UTF-8",
-            "Origin":                      "https://thisvid.com",
-            "Referer":                     LOGIN_PAGE,
-            "Priority":                    "u=1, i",
-            "X-Requested-With":            "XMLHttpRequest",
-            "sec-ch-ua-arch":              '"arm"',
-            "sec-ch-ua-bitness":           '"64"',
-            "sec-ch-ua-full-version":      '"146.0.7680.153"',
-            "sec-ch-ua-full-version-list": '"Chromium";v="146.0.7680.153", "Not-A.Brand";v="24.0.0.0", "Google Chrome";v="146.0.7680.153"',
-            "sec-ch-ua-model":             '""',
-            "sec-ch-ua-platform-version":  '"26.1.0"',
-            "Sec-Fetch-Dest":              "empty",
-            "Sec-Fetch-Mode":              "cors",
-            "Sec-Fetch-Site":              "same-origin",
-        })
-        self.session.headers.pop("Upgrade-Insecure-Requests", None)
-        self.session.headers.pop("Sec-Fetch-User", None)
-
-        resp = self.session.post(LOGIN_URL, data={
-            "username":    self.username,
-            "pass":        self.password,
-            "action":      "login",
-            "email_link":  "https://thisvid.com/email/",
-            "remember_me": "1",
-        }, timeout=20, allow_redirects=True)
-        resp.raise_for_status()
-
-        m = re.search(r"userId:\s*'(\d+)'", resp.text)
+        m = re.search(r"userId:\s*'(\d+)'", content)
         if not m:
-            print(f"DEBUG: Login response status={resp.status_code}, url={resp.url}", file=sys.stderr)
-            print(f"DEBUG: Response length={len(resp.text)}", file=sys.stderr)
-            print(f"DEBUG: History={[r.status_code for r in resp.history]}", file=sys.stderr)
-            print(f"DEBUG: First 2000 chars of response:\n{resp.text[:2000]}", file=sys.stderr)
+            print(f"DEBUG: Final URL: {final_url}", file=sys.stderr)
+            print(f"DEBUG: Response length: {len(content)}", file=sys.stderr)
+            print(f"DEBUG: First 2000 chars:\n{content[:2000]}", file=sys.stderr)
             sys.exit(
                 "ERROR: Login failed — check that your username and password are correct.\n"
                 "Make sure you have a file called 'env' with your credentials.\n"
                 "See env.template for the correct format."
             )
+
         self.uid = m.group(1)
-        print(f"# Logged in as {self.username} (uid={self.uid})", file=sys.stderr)
+
+        for c in cookies:
+            self.session.cookies.set(
+                c["name"], c["value"],
+                domain=c.get("domain", ""),
+                path=c.get("path", "/"),
+            )
 
         self.session.headers.update({
-            "Accept":         "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "same-origin",
-            "Sec-Fetch-User": "?1",
-            "Referer":        "https://thisvid.com/",
+            "User-Agent":       browser_user_agent,
+            "Accept":           "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language":  "en-US,en;q=0.9",
+            "Accept-Encoding":  "gzip, deflate, br, zstd",
+            "Connection":       "keep-alive",
+            "Sec-Fetch-Dest":   "document",
+            "Sec-Fetch-Mode":   "navigate",
+            "Sec-Fetch-Site":   "same-origin",
+            "Sec-Fetch-User":   "?1",
+            "Referer":          "https://thisvid.com/",
         })
-        self.session.headers.pop("X-Requested-With", None)
-        self.session.headers.pop("Content-Type", None)
 
+        print(f"# Logged in as {self.username} (uid={self.uid})", file=sys.stderr)
         return self
 
     def get(self, url, **kwargs):
